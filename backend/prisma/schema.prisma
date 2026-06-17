@@ -1,0 +1,77 @@
+// Student Document Tracking System — Prisma schema (PostgreSQL)
+// Lean relational design tuned for a small institution on a low-resource VPS.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  student
+  admin
+  counsellor
+}
+
+enum DocumentStatus {
+  pending
+  approved
+  rejected
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(student)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents     Document[]
+  reviewedDocs  Document[] @relation("ReviewedBy")
+  auditLogs     AuditLog[]
+
+  @@index([role])
+}
+
+model Document {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fileName  String         // original filename shown to users
+  storedName String        // randomized on-disk name (never exposed)
+  mimeType  String
+  sizeBytes Int
+  fileUrl   String         // access route, e.g. /api/documents/:id/file
+
+  status    DocumentStatus @default(pending)
+  remarks   String?
+
+  reviewedById String?
+  reviewedBy   User?       @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Optional audit trail for administrative / review actions.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([createdAt])
+}
